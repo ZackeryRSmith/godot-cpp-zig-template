@@ -2,6 +2,7 @@
     .name = .my_gdextension,
     .version = "0.0.1",
     .fingerprint = 0x414f3bcc52eae48b, // changing this has security and trust implications
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .godot_cpp = .{
             .path = "extern/godot-cpp",
@@ -11,5 +12,12 @@
             .hash = "zig_compile_commands-0.0.1-OZg5-e_JAAAGg1WHAePtq4l4Uvjs34BexnFFCZk63EaG",
         },
     },
-    .paths = .{""},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "project",
+        "LICENSE",
+        "README.md",
+    },
 }
