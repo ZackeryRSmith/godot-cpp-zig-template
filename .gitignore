@@ -10,7 +10,7 @@ compile_commands.json
 .cache/
 
 # ignore library files but not the gdextension file
-/bin/**
+project/bin/**
 !project/bin/*.gdextension
 
 .zed/
