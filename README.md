@@ -21,7 +21,7 @@ Once created, get started with your new GDExtension by running these steps:
 3. Rename the template extension *(replace `SOME_SUPER_AWESOME_NAME` with your project name)*
    * **Windows (PowerShell):**
      ```powershell
-     Get-ChildItem -Recurse -File | ForEach-Object { (Get-Content \(_.FullName) -replace '\bmy_extension\b', 'SOME_SUPER_AWESOME_NAME' \vert{} Set-Content\)_.FullName }
+     Get-ChildItem -Recurse -File | ForEach-Object { (Get-Content $_.FullName) -replace '\bmy_extension\b', 'SOME_SUPER_AWESOME_NAME' | Set-Content $_.FullName }
      ```
    * **macOS:**
      ```bash
