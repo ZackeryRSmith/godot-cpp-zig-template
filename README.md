@@ -11,25 +11,17 @@ To use this locally on your machine, you will need the following:
 - [**Git**](https://git-scm.com/) 1.5.3+
 
 ## Usage
+Click the green **"Use this template"** button on GitHub to create a copy with a clean git history.
 
-To use this template, log in to GitHub and click the green **"Use this template"** button at the top of the repository page to create a copy with a clean git history. 
+> [!NOTE]
+> Bindings will be generated automatically on first build and your compiled library will be output to `project/bin/<platform>/`
 
-Once created, get started with your new GDExtension by running these steps:
+1. Clone your repository: `git clone --recurse-submodules <your-repo-url>`
+2. Open `build.zig.zon`:
+   - Change `.name = .my_extension` to your extension's name e.g. `.name = .cool_extension`
+   - Delete the `.fingerprint = ...` line
+3. Rename `project/bin/my_extension.gdextension` to match your extension name and update path references inside it from `my_extension` to your chosen name
+5. Run `zig build`
 
-1. Clone your repository
-2. Initialize the godot-cpp git submodule with `git submodule update --init`
-3. Rename the template extension *(replace `SOME_SUPER_AWESOME_NAME` with your project name)*
-   * **Windows (PowerShell):**
-     ```powershell
-     Get-ChildItem -Recurse -File | ForEach-Object { (Get-Content $_.FullName) -replace '\bmy_extension\b', 'SOME_SUPER_AWESOME_NAME' | Set-Content $_.FullName }
-     ```
-   * **macOS:**
-     ```bash
-     find . -type f -exec sed -i '' 's/\bmy_extension\b/SOME_SUPER_AWESOME_NAME/g' {} +
-     ```
-   * **Linux / WSL / Git Bash:**
-     ```bash
-     find . -type f -exec sed -i 's/\bmy_extension\b/SOME_SUPER_AWESOME_NAME/g' {} +
-     ```
-4. Open `build.zig.zon` and delete the `.fingerprint = ...` line
-5. Build the project with `zig build`
+## Build Profile
+To reduce compile times and binary size, you can modify the `build_profile.json` in the project root to strip unused Godot classes from the bindings.
