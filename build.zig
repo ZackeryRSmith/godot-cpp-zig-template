@@ -24,6 +24,13 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const allocator = b.allocator;
 
+    const trim_api = b.option(
+        bool,
+        "trim-api",
+        "Only generate/compile bindings for classes listed in build_profile.json (faster builds)",
+    ) orelse false;
+    const build_profile_path = "build_profile.json";
+
     var targets: std.ArrayList(*std.Build.Step.Compile) = .empty;
     defer targets.deinit(allocator);
 
@@ -31,6 +38,28 @@ pub fn build(b: *std.Build) void {
         "-std=c++17",
         "-fno-exceptions",
     };
+
+    const gen_stamp_path = "extern/godot-cpp/gen/.trim-api-stamp";
+
+    // capture both "trimmed vs full" and the requrested features
+    const gen_stamp_contents = if (trim_api) blk: {
+        const profile_bytes = b.build_root.handle.readFileAlloc(
+            b.graph.io,
+            build_profile_path,
+            allocator,
+            .limited(10 * 1024 * 1024),
+        ) catch |err| {
+            std.debug.print(
+                "Error reading {s}: {any} (required when -Dtrim-api=true)\n",
+                .{ build_profile_path, err },
+            );
+            break :blk b.fmt("trimmed:missing", .{});
+        };
+        defer allocator.free(profile_bytes);
+        var hash: [std.crypto.hash.sha3.Sha3_256.digest_length]u8 = undefined;
+        std.crypto.hash.sha3.Sha3_256.hash(profile_bytes, &hash, .{});
+        break :blk b.fmt("trimmed:{s}", .{std.fmt.bytesToHex(&hash, .lower)});
+    } else b.fmt("full", .{});
 
     const needs_gen = blk: {
         var dir = b.build_root.handle.openDir(
@@ -41,8 +70,79 @@ pub fn build(b: *std.Build) void {
         defer dir.close(b.graph.io);
         var it = dir.iterate();
         const first = it.next(b.graph.io) catch break :blk true;
-        break :blk first == null;
+        if (first == null) break :blk true;
+
+        // bindings exist but were they generated with the requested mode and features
+        const stamp = b.build_root.handle.readFileAlloc(
+            b.graph.io,
+            gen_stamp_path,
+            allocator,
+            .limited(1024),
+        ) catch break :blk true;
+        defer allocator.free(stamp);
+        break :blk !std.mem.eql(u8, stamp, gen_stamp_contents);
     };
+
+    if (needs_gen) {
+        const python = findPython(b) orelse {
+            std.debug.print(
+                \\Error: Python not found. Please install Python 3 and ensure
+                \\'python', 'python3', or 'py' is available in your PATH.
+                \\This is required to generate godot-cpp bindings.
+                \\
+            , .{});
+            return;
+        };
+
+        // wipe stale gen
+        b.build_root.handle.deleteTree(b.graph.io, "extern/godot-cpp/gen") catch {};
+
+        const profile_arg = if (trim_api) b.pathFromRoot(build_profile_path) else "";
+        const gen_script = b.fmt(
+            \\import sys
+            \\sys.path.insert(0, r'{s}')
+            \\from binding_generator import _generate_bindings
+            \\from build_profile import generate_trimmed_api
+            \\api = generate_trimmed_api(r'{s}', r'{s}')
+            \\_generate_bindings(api, r'{s}', True, '64', 'single', r'{s}')
+        ,
+            .{
+                b.pathFromRoot("extern/godot-cpp"),
+                b.pathFromRoot("extern/godot-cpp/gdextension/extension_api.json"),
+                profile_arg,
+                b.pathFromRoot("extern/godot-cpp/gdextension/extension_api.json"),
+                b.pathFromRoot("extern/godot-cpp"),
+            },
+        );
+
+        var child = std.process.spawn(b.graph.io, .{
+            .argv = &.{ python, "-c", gen_script },
+        }) catch |err| {
+            std.debug.print("Error running godot-cpp binding generator: {any}\n", .{err});
+            return;
+        };
+        const term = child.wait(b.graph.io) catch |err| {
+            std.debug.print("Error waiting on godot-cpp binding generator: {any}\n", .{err});
+            return;
+        };
+        if (term.exited != 0) {
+            std.debug.print("godot-cpp binding generator exited with code {d}\n", .{term.exited});
+            return;
+        }
+
+        var stamp_file = b.build_root.handle.createFile(
+            b.graph.io,
+            gen_stamp_path,
+            .{},
+        ) catch |err| {
+            std.debug.print("Warning: could not write gen stamp file: {any}\n", .{err});
+            return;
+        };
+        defer stamp_file.close(b.graph.io);
+        stamp_file.writeStreamingAll(b.graph.io, gen_stamp_contents) catch |err| {
+            std.debug.print("Warning: could not write gen stamp file: {any}\n", .{err});
+        };
+    }
 
     const godot_lib = b.addLibrary(.{
         .name = "godot-cpp",
@@ -58,38 +158,6 @@ pub fn build(b: *std.Build) void {
     godot_lib.root_module.addIncludePath(b.path("extern/godot-cpp/include"));
     godot_lib.root_module.addIncludePath(b.path("extern/godot-cpp/gdextension"));
     godot_lib.root_module.addIncludePath(b.path("extern/godot-cpp/gen/include"));
-
-    if (needs_gen) {
-        const python = findPython(b) orelse {
-            std.debug.print(
-                \\Error: Python not found. Please install Python 3 and ensure
-                \\'python', 'python3', or 'py' is available in your PATH.
-                \\This is required to generate godot-cpp bindings.
-                \\
-            , .{});
-            return;
-        };
-        const gen_step = b.addSystemCommand(&.{
-            python,
-            "-c",
-            b.fmt(
-                \\import sys
-                \\sys.path.insert(0, r'{s}')
-                \\from binding_generator import _generate_bindings
-                \\from build_profile import generate_trimmed_api
-                \\api = generate_trimmed_api(r'{s}', '')
-                \\_generate_bindings(api, r'{s}', True, '64', 'single', r'{s}')
-            ,
-                .{
-                    b.pathFromRoot("extern/godot-cpp"),
-                    b.pathFromRoot("extern/godot-cpp/gdextension/extension_api.json"),
-                    b.pathFromRoot("extern/godot-cpp/gdextension/extension_api.json"),
-                    b.pathFromRoot("extern/godot-cpp"),
-                },
-            ),
-        });
-        godot_lib.step.dependOn(&gen_step.step);
-    }
 
     var godot_files: std.ArrayList([]const u8) = .empty;
     defer godot_files.deinit(allocator);

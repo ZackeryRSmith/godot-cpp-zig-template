@@ -1,0 +1,5 @@
+{
+  "_": "This is an example build profile and not used by default. Append the `-Dtrim-api=true` flag when building.",
+  "type": "feature_profile",
+  "enabled_classes": ["Node", "OS"]
+}
