@@ -1,3 +1,17 @@
 .zig-cache/
 zig-out/
+zig-pkg/
 *.o
+
+.godot/
+.DS_Store
+
+compile_commands.json
+.cache/
+
+# ignore library files but not the gdextension file
+/bin/**
+!project/bin/*.gdextension
+
+.zed/
+.vscode/
