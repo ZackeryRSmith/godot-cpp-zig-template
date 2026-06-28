@@ -276,6 +276,7 @@ pub fn build(b: *std.Build) void {
     const install = b.addInstallArtifact(lib, .{
         .dest_dir = .{ .override = .{ .custom = b.fmt("../project/bin/{s}", .{os_name}) } },
         .dest_sub_path = output_name,
+        .pdb_dir = .{ .override = .{ .custom = b.fmt("../project/bin/{s}/godot_padding", .{os_name}) } },
     });
     b.getInstallStep().dependOn(&install.step);
 
